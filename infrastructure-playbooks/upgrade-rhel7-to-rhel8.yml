@@ -1,0 +1,165 @@
+---
+- hosts: localhost
+  connection: local
+  tasks:
+    - name: check the leapp data archive is present on the ansible controller
+      debug:
+        msg: "{{ lookup('file', leapp_data_filename) }}"
+
+
+- hosts:
+    - "{{ mon_group_name | default('mons') }}"
+    - "{{ mgr_group_name | default('mgrs') }}"
+    - "{{ osd_group_name | default('osds') }}"
+    - "{{ mds_group_name | default('mdss') }}"
+    - "{{ rgw_group_name | default('rgws') }}"
+    - "{{ nfs_group_name | default('nfss') }}"
+    - "{{ rbdmirror_group_name | default('rbdmirrors') }}"
+    - "{{ iscsi_gw_group_name | default('iscsigws') }}"
+    - "{{ client_group_name | default('clients') }}"
+  become: true
+  tasks:
+    - import_role:
+        name: ceph-defaults
+
+    - name: enable repos
+      rhsm_repository:
+        name: ['rhel-7-server-rpms', 'rhel-7-server-extras-rpms']
+        purge: True
+
+    - name: set release
+      command: subscription-manager release --set {{ leapp_rhel_release }}
+      changed_when: false
+
+    - name: update system
+      command: yum update -y
+      changed_when: false
+
+
+- hosts:
+    - "{{ mon_group_name | default('mons') }}"
+    - "{{ mgr_group_name | default('mgrs') }}"
+    - "{{ osd_group_name | default('osds') }}"
+    - "{{ mds_group_name | default('mdss') }}"
+    - "{{ rgw_group_name | default('rgws') }}"
+    - "{{ nfs_group_name | default('nfss') }}"
+    - "{{ rbdmirror_group_name | default('rbdmirrors') }}"
+    - "{{ iscsi_gw_group_name | default('iscsigws') }}"
+  serial: 1
+  become: true
+  tasks:
+    - import_role:
+        name: ceph-defaults
+
+    - name: reboot              # if docker-to-podman was run before this playbook, the daemon won't come back.
+      reboot:                   # should we assume as soon as we started this playbook against that node we don't care if it doesn't come back here?
+        reboot_timeout: 600
+        test_command: uptime
+
+
+- hosts: "{{ client_group_name | default('clients') }}"
+  become: true
+  tasks:
+    - import_role:
+        name: ceph-defaults
+
+    - name: reboot
+      reboot:
+        reboot_timeout: 600
+        test_command: uptime
+
+
+- hosts: 
+    - "{{ mon_group_name | default('mons') }}"
+    - "{{ mgr_group_name | default('mgrs') }}"
+    - "{{ osd_group_name | default('osds') }}"
+    - "{{ mds_group_name | default('mdss') }}"
+    - "{{ rgw_group_name | default('rgws') }}"
+    - "{{ nfs_group_name | default('nfss') }}"
+    - "{{ rbdmirror_group_name | default('rbdmirrors') }}"
+    - "{{ iscsi_gw_group_name | default('iscsigws') }}"
+    - "{{ client_group_name | default('clients') }}"
+
+    - import_role:
+        name: ceph-defaults
+
+    - name: install leapp
+      package:
+        name: leapp
+        state: present
+
+    - name: untar leapp tarball
+      unarchive:
+        src: leapp-data8.tar.gz
+        dest: /etc/leapp/files
+      changed_when: false
+
+    - name: run leapp preupgrade
+      command: leapp preupgrade
+      register: leapp_preupgrade_result
+      changed_when: false
+
+    - name: run leapp upgrade
+      command: leapp upgrade
+      changed_when: false
+
+
+
+- hosts:
+    - "{{ mon_group_name | default('mons') }}"
+    - "{{ mgr_group_name | default('mgrs') }}"
+    - "{{ osd_group_name | default('osds') }}"
+    - "{{ mds_group_name | default('mdss') }}"
+    - "{{ rgw_group_name | default('rgws') }}"
+    - "{{ nfs_group_name | default('nfss') }}"
+    - "{{ rbdmirror_group_name | default('rbdmirrors') }}"
+    - "{{ iscsi_gw_group_name | default('iscsigws') }}"
+  serial: 1
+  become: true
+  tasks:
+    - import_role:
+        name: ceph-defaults
+
+    - name: reboot
+      reboot:
+        reboot_timeout: 3600
+        test_command: uptime
+
+
+- hosts: "{{ client_group_name | default('clients') }}"
+  become: true
+  tasks:
+    - import_role:
+        name: ceph-defaults
+
+    - name: reboot
+      reboot:
+        reboot_timeout: 3600
+        test_command: uptime
+
+
+- hosts:
+    - "{{ mon_group_name | default('mons') }}"
+    - "{{ mgr_group_name | default('mgrs') }}"
+    - "{{ osd_group_name | default('osds') }}"
+    - "{{ mds_group_name | default('mdss') }}"
+    - "{{ rgw_group_name | default('rgws') }}"
+    - "{{ nfs_group_name | default('nfss') }}"
+    - "{{ rbdmirror_group_name | default('rbdmirrors') }}"
+    - "{{ iscsi_gw_group_name | default('iscsigws') }}"
+    - "{{ client_group_name | default('clients') }}"
+  become: true
+  tasks:
+    - import_role:
+        name: ceph-defaults
+
+    - name: set_fact ansible_python_interpreter
+      set_fact:
+        ansible_python_interpreter: /usr/bin/python3
+
+    - name: Enable SELinux
+      selinux:
+        policy: targeted
+        state: enforcing
+
+# enable RHCS4-EL8 repo?
